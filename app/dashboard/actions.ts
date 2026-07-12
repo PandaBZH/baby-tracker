@@ -149,7 +149,7 @@ export async function getPlannedCareTypes(familyId: string) {
 
 export async function logPlannedCare(
   babyId: string,
-  careId: string,
+  careScheduleId: string,  // ← Renomme
   loggedAt: string
 ) {
   const supabase = await createClient()
@@ -159,7 +159,7 @@ export async function logPlannedCare(
 
   const { error } = await supabase.from('planned_care_logs').insert({
     baby_id: babyId,
-    care_id: careId,
+    care_schedule_id: careScheduleId,  // ← Change ici
     logged_at: loggedAt,
     created_by: user.id,
   })
