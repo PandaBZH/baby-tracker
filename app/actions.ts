@@ -1,7 +1,12 @@
 // app/actions.ts
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+
 export async function getScheduledActionsForToday(babyId: string) {
+  const supabase = await createClient()
   const today = new Date().toISOString().split('T')[0]
-  
+
   const { data, error } = await supabase
     .from('care_logs')
     .select(`
