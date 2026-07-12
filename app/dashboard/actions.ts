@@ -48,6 +48,7 @@ export async function quickCheck(logId: string, quantityPrevue: number | null) {
 
 export async function adjustCheck(
   logId: string,
+  doneAtIso: string,
   quantity: number | null,
   note: string | null
 ) {
@@ -58,7 +59,7 @@ export async function adjustCheck(
     .from('care_logs')
     .update({
       fait: true,
-      done_at: new Date().toISOString(),
+      done_at: doneAtIso,
       quantity,
       note,
       created_by: user?.id,
@@ -67,6 +68,7 @@ export async function adjustCheck(
 
   if (error) throw new Error(error.message)
   revalidatePath('/')
+}
 }
 
 export async function uncheckLog(logId: string) {
