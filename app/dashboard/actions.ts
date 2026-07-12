@@ -187,33 +187,17 @@ export async function removePlannedCareLog(
   revalidatePath('/')
 }
 
+// Dans actions.ts
 export async function getPlannedCareForDate(babyId: string, date: string) {
-  try {
-    console.log('🔍 getPlannedCareForDate appelée avec:', { babyId, date })
-    
-    const supabase = await createClient()
-    
-    // Formate correctement la date
-    const dateObj = new Date(date + 'T00:00:00.000Z')
-    const startDate = dateObj.toISOString()
-    const endDate = new Date(dateObj.getTime() + 24 * 60 * 60 * 1000).toISOString()
-    
-    console.log('📅 Dates:', { startDate, endDate })
-
-    const { data, error } = await supabase
-      .from('planned_care_logs')
-      .select('care_schedule_id') 
-      .eq('baby_id', babyId)
-      .gte('logged_at', startDate)
-      .lt('logged_at', endDate)
-
-    console.log('📊 Résultat:', { data, error })
-
-    if (error) throw new Error(error.message)
-    
-    return data?.map((log: any) => log.care_schedule_id) || []  
-  } catch (err) {
-    console.error('❌ Erreur getPlannedCareForDate:', err)
-    return []
-  }
+  const supabase = await createClient()
+  
+  const { data, error } = await supabase
+    .from('care_logs')
+    .select('id')
+    .eq('baby_id', babyId)
+    .eq('scheduled_date', date)
+    .eq('fait', true)
+  
+  if (error) throw new Error(error.message)
+  return data?.map(log => log.id) || []
 }

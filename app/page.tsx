@@ -240,37 +240,36 @@ console.log('PC ERROR:', pcError)
         }
 
         const babyData = babies[0]
-        setBaby(babyData)
+      setBaby(babyData)
 
-        // Récupère les soins planifiés du jour (ordre croissant)
-        const logs = await getCareLogsForDate(babyData.id, today)
-        setCareLogs(logs?.sort((a, b) => {
-          const timeA = a.scheduled_time || '00:00'
-          const timeB = b.scheduled_time || '00:00'
-          return timeA.localeCompare(timeB)
-        }) || [])
+      // Récupère les soins planifiés du jour (ordre croissant)
+      const logs = await getCareLogsForDate(babyData.id, today)
+      setCareLogs(logs?.sort((a, b) => {
+        const timeA = a.scheduled_time || '00:00'
+        const timeB = b.scheduled_time || '00:00'
+        return timeA.localeCompare(timeB)
+      }) || [])
 
-        // Récupère les types de soins disponibles
-        const careTypes = await getPlannedCareTypes(profile.family_id)
-        setPlannedCares(careTypes)
+      // Récupère les types de soins disponibles
+      const careTypes = await getPlannedCareTypes(profile.family_id)
+      setPlannedCares(careTypes)
 
-        // Récupère les soins planifiés cochés pour aujourd'hui
-        const checkedCares = await getPlannedCareForDate(babyData.id, today)
-        setCheckedPlannedCares(checkedCares)
+      // 👇 REMPLACE CETTE PARTIE PAR LE CODE DU 4️⃣
+      const checkedCares = await getPlannedCareForDate(babyData.id, today)
+      setCheckedPlannedCares(checkedCares)
 
-        // Récupère l'historique
-        await fetchHistory(babyData.id)
-      } catch (err) {
-        console.error(err)
-        setError('Erreur')
-      } finally {
-        setLoading(false)
-      }
+      // Récupère l'historique
+      await fetchHistory(babyData.id)
+    } catch (err) {
+      console.error(err)
+      setError('Erreur')
+    } finally {
+      setLoading(false)
     }
+  }
 
-    init()
-  }, [])
-
+  init()
+}, [])
   if (loading) return <div className="p-8">Chargement...</div>
   if (!baby || !family) return <div className="p-8">{error}</div>
 
