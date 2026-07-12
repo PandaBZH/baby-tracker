@@ -1,91 +1,90 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
 
-export default async function NewTemperaturePage({
+export default function NewTemperaturePage({
   searchParams,
 }: {
   searchParams: { baby?: string; date?: string }
 }) {
-  const supabase = await createClient()
+  const [temperature, setTemperature] = useState(37.0)
+  const [type, setType] = useState('frontal')
+  const [note, setNote] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/login')
-  }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile || !profile.family_id) {
-    return (
-      <div className="p-6">
-        <p className="text-red-600">Aucune famille associée.</p>
-      </div>
-    )
-  }
-
-  const { data: babies } = await supabase
-    .from('babies')
-    .select('*')
-    .eq('family_id', profile.family_id)
-
-  const baby = babies?.[0]
-
-  if (!baby) {
-    return (
-      <div className="p-6">
-        <p>Aucun bébé enregistré.</p>
-      </div>
-    )
-  }
-
-  // Même logique que pour les tétées
   const now = new Date()
   const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
     .toISOString()
     .slice(0, 16)
+  const [measuredAt, setMeasuredAt] = useState(localDateTime)
 
-  async function createTemperature(formData: FormData) {
-    'use server'
+  const increaseTemp = () => {
+    setTemperature(prev => parseFloat((prev + 0.1).toFixed(1)))
+  }
 
-    const supabase = await createClient()
+  const decreaseTemp = () => {
+    setTemperature(prev => parseFloat((prev - 0.1).toFixed(1)))
+  }
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+  async function createTemperature(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
 
-    if (!user) {
-      redirect('/login')
+    try {
+      const supabase = createClient()
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        redirect('/login')
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+
+      if (!profile || !profile.family_id) {
+        throw new Error('Aucune famille associée')
+      }
+
+      const { data: babies } = await supabase
+        .from('babies')
+        .select('*')
+        .eq('family_id', profile.family_id)
+
+      const baby = babies?.[0]
+
+      if (!baby) {
+        throw new Error('Aucun bébé enregistré')
+      }
+
+      const { error } = await supabase.from('temperatures').insert({
+        baby_id: baby.id,
+        temperature,
+        type,
+        measured_at: new Date(measuredAt).toISOString(),
+        note: note || null,
+        created_by: user.id,
+      })
+
+      if (error) throw error
+
+      revalidatePath('/')
+      window.location.href = '/'
+    } catch (error) {
+      console.error('Erreur:', error)
+      alert('Erreur lors de l\'enregistrement')
+    } finally {
+      setLoading(false)
     }
-
-    const temperature = formData.get('temperature') as string
-    const type = formData.get('type') as string
-    const measured_at = formData.get('measured_at') as string
-    const note = formData.get('note') as string
-
-    const { error } = await supabase.from('temperatures').insert({
-      baby_id: baby.id,
-      temperature: parseFloat(temperature),
-      type,
-      measured_at: new Date(measured_at).toISOString(),
-      note: note || null,
-      created_by: user.id,
-    })
-
-    if (error) {
-      throw new Error(error.message)
-    }
-
-    revalidatePath('/')
-    redirect('/')
   }
 
   return (
@@ -97,81 +96,87 @@ export default async function NewTemperaturePage({
         </Link>
       </div>
 
-      <form action={createTemperature} className="space-y-4">
+      <form onSubmit={createTemperature} className="space-y-4">
+        {/* Température avec +/- */}
         <div>
-          <label className="block text-sm font-medium mb-2">Température (°C)</label>
-          <input
-            type="number"
-            name="temperature"
-            step="0.1"
-            min="35"
-            max="42"
-            required
-            placeholder="37.2"
-            className="w-full border rounded-lg p-2"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-2">Type de mesure</label>
-          <div className="grid grid-cols-3 gap-2">
-            <label className="flex items-center justify-center border rounded-lg p-3 cursor-pointer has-[:checked]:bg-red-600 has-[:checked]:text-white transition">
-                <input
-                    type="radio"
-                    name="type"
-                    value="frontal"
-                    required
-                    defaultChecked
-                    className="sr-only"
-                />
-            👶 Frontal
-            </label>
-            <label className="flex items-center justify-center border rounded-lg p-3 cursor-pointer has-[:checked]:bg-red-600 has-[:checked]:text-white transition">
-              <input
-                type="radio"
-                name="type"
-                value="aisselle"
-                className="sr-only"
-              />
-              💪 Aisselle
-            </label>
-            <label className="flex items-center justify-center border rounded-lg p-3 cursor-pointer has-[:checked]:bg-red-600 has-[:checked]:text-white transition">
-              <input
-                type="radio"
-                name="type"
-                value="rectal"
-                className="sr-only"
-              />
-              🫣 Rectal
-            </label>
+          <label className="block text-sm font-medium mb-3">Température (°C)</label>
+          <div className="flex items-center justify-center gap-4 bg-red-100 p-4 rounded-lg">
+            <button
+              type="button"
+              onClick={decreaseTemp}
+              className="bg-red-500 text-white px-4 py-2 rounded-lg font-bold text-xl hover:bg-red-600 disabled:opacity-50"
+              disabled={temperature <= 35}
+            >
+              −
+            </button>
+            <div className="text-4xl font-bold w-24 text-center">
+              {temperature.toFixed(1)}
+            </div>
+            <button
+              type="button"
+              onClick={increaseTemp}
+              className="bg-red-500 text-white px-4 py-2 rounded-lg font-bold text-xl hover:bg-red-600 disabled:opacity-50"
+              disabled={temperature >= 42}
+            >
+              +
+            </button>
           </div>
         </div>
 
+        {/* Type de mesure */}
+        <div>
+          <label className="block text-sm font-medium mb-2">Type de mesure</label>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { value: 'frontal', label: '👶 Frontal' },
+              { value: 'aisselle', label: '💪 Aisselle' },
+              { value: 'rectal', label: '🫣 Rectal' },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setType(opt.value)}
+                className={`border rounded-lg p-3 font-medium transition ${
+                  type === opt.value
+                    ? 'bg-red-600 text-white border-red-600'
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Heure */}
         <div>
           <label className="block text-sm font-medium mb-1">
             Heure de la mesure
           </label>
           <input
             type="datetime-local"
-            name="measured_at"
+            value={measuredAt}
+            onChange={(e) => setMeasuredAt(e.target.value)}
             required
-            defaultValue={localDateTime}
             className="w-full border rounded-lg p-2"
           />
         </div>
 
+        {/* Note */}
         <div>
           <label className="block text-sm font-medium mb-1">
             Note — optionnel
           </label>
           <textarea
-            name="note"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
             rows={2}
             className="w-full border rounded-lg p-2"
             placeholder="Ex: enfant fiévreux..."
           />
         </div>
 
+        {/* Boutons */}
         <div className="flex gap-2">
           <Link
             href="/"
@@ -181,9 +186,10 @@ export default async function NewTemperaturePage({
           </Link>
           <button
             type="submit"
-            className="flex-1 bg-red-600 text-white rounded-lg py-2 font-medium"
+            disabled={loading}
+            className="flex-1 bg-red-600 text-white rounded-lg py-2 font-medium disabled:opacity-50"
           >
-            Enregistrer
+            {loading ? 'Enregistrement...' : 'Enregistrer'}
           </button>
         </div>
       </form>
