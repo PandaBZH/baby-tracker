@@ -3,7 +3,11 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
 
-export default async function NewDiaperPage() {
+export default async function NewTemperaturePage({
+  searchParams,
+}: {
+  searchParams: { baby?: string; date?: string }
+}) {
   const supabase = await createClient()
 
   const {
@@ -43,12 +47,13 @@ export default async function NewDiaperPage() {
     )
   }
 
+  // Même logique que pour les tétées
   const now = new Date()
   const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
     .toISOString()
     .slice(0, 16)
 
-  async function createDiaper(formData: FormData) {
+  async function createTemperature(formData: FormData) {
     'use server'
 
     const supabase = await createClient()
@@ -61,14 +66,16 @@ export default async function NewDiaperPage() {
       redirect('/login')
     }
 
+    const temperature = formData.get('temperature') as string
     const type = formData.get('type') as string
-    const changed_at = formData.get('changed_at') as string
+    const measured_at = formData.get('measured_at') as string
     const note = formData.get('note') as string
 
-    const { error } = await supabase.from('diapers').insert({
+    const { error } = await supabase.from('temperatures').insert({
       baby_id: baby.id,
+      temperature: parseFloat(temperature),
       type,
-      changed_at: new Date(changed_at).toISOString(),
+      measured_at: new Date(measured_at).toISOString(),
       note: note || null,
       created_by: user.id,
     })
@@ -84,54 +91,69 @@ export default async function NewDiaperPage() {
   return (
     <div className="max-w-md mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">🧷 Ajouter une couche</h1>
+        <h1 className="text-2xl font-bold">🌡️ Ajouter une température</h1>
         <Link href="/" className="text-gray-500 text-sm underline">
           ✕ Annuler
         </Link>
       </div>
 
-      <form action={createDiaper} className="space-y-4">
+      <form action={createTemperature} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-2">Type</label>
+          <label className="block text-sm font-medium mb-2">Température (°C)</label>
+          <input
+            type="number"
+            name="temperature"
+            step="0.1"
+            min="35"
+            max="42"
+            required
+            placeholder="37.2"
+            className="w-full border rounded-lg p-2"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Type de mesure</label>
           <div className="grid grid-cols-3 gap-2">
-            <label className="flex items-center justify-center border rounded-lg p-3 cursor-pointer has-[:checked]:bg-yellow-500 has-[:checked]:text-white transition">
-              <input
-                type="radio"
-                name="type"
-                value="pipi"
-                required
-                className="sr-only"
-              />
-              Pipi
+            <label className="flex items-center justify-center border rounded-lg p-3 cursor-pointer has-[:checked]:bg-red-600 has-[:checked]:text-white transition">
+                <input
+                    type="radio"
+                    name="type"
+                    value="frontal"
+                    required
+                    defaultChecked
+                    className="sr-only"
+                />
+            👶 Frontal
             </label>
-            <label className="flex items-center justify-center border rounded-lg p-3 cursor-pointer has-[:checked]:bg-yellow-500 has-[:checked]:text-white transition">
+            <label className="flex items-center justify-center border rounded-lg p-3 cursor-pointer has-[:checked]:bg-red-600 has-[:checked]:text-white transition">
               <input
                 type="radio"
                 name="type"
-                value="caca"
+                value="aisselle"
                 className="sr-only"
               />
-              Caca
+              💪 Aisselle
             </label>
-            <label className="flex items-center justify-center border rounded-lg p-3 cursor-pointer has-[:checked]:bg-yellow-500 has-[:checked]:text-white transition">
+            <label className="flex items-center justify-center border rounded-lg p-3 cursor-pointer has-[:checked]:bg-red-600 has-[:checked]:text-white transition">
               <input
                 type="radio"
                 name="type"
-                value="les_deux"
+                value="rectal"
                 className="sr-only"
               />
-              Les deux
+              🫣 Rectal
             </label>
           </div>
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">
-            Heure du change
+            Heure de la mesure
           </label>
           <input
             type="datetime-local"
-            name="changed_at"
+            name="measured_at"
             required
             defaultValue={localDateTime}
             className="w-full border rounded-lg p-2"
@@ -146,7 +168,7 @@ export default async function NewDiaperPage() {
             name="note"
             rows={2}
             className="w-full border rounded-lg p-2"
-            placeholder="Ex: irritation, couleur inhabituelle..."
+            placeholder="Ex: enfant fiévreux..."
           />
         </div>
 
@@ -159,7 +181,7 @@ export default async function NewDiaperPage() {
           </Link>
           <button
             type="submit"
-            className="flex-1 bg-yellow-500 text-white rounded-lg py-2 font-medium"
+            className="flex-1 bg-red-600 text-white rounded-lg py-2 font-medium"
           >
             Enregistrer
           </button>

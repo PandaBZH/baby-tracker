@@ -18,12 +18,25 @@ export type CareScheduleInput = {
   times: string[] // ["08:00", "12:00", ...]
 }
 
+// Mapping entre les valeurs du formulaire et les valeurs réelles en base
+function mapFrequencyType(f: CareScheduleInput['frequence_type']): string {
+  switch (f) {
+    case 'hebdomadaire':
+      return 'jours_semaine'
+    case 'ponctuel':
+      return 'intervalle_jours'
+    case 'quotidien':
+    default:
+      return 'quotidien'
+  }
+}
+
 export async function getCareTypes() {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('care_types')
     .select('*')
-    .order('label')
+    .order('name')
 
   if (error) throw new Error(error.message)
   return data
@@ -45,13 +58,31 @@ export async function getCareSchedules(babyId: string) {
   const { data, error } = await supabase
     .from('care_schedules')
     .select(`
-      *,
-      care_types (id, label, icon),
-      care_schedule_times (id, scheduled_time)
+      id,
+      frequency_type,
+      times_per_day,
+      interval_days,
+      days_of_week,
+      active,
+      valid_from,
+      valid_to,
+      default_quantity,
+      default_unit,
+      care_types (
+        id,
+        name,
+        icon
+      ),
+      care_schedule_times (
+        id,
+        time_of_day,
+        label,
+        quantity,
+        sort_order
+      )
     `)
     .eq('baby_id', babyId)
-    .order('active', { ascending: false })
-    .order('created_at', { ascending: false })
+    .eq('active', true)
 
   if (error) throw new Error(error.message)
   return data
@@ -67,14 +98,14 @@ export async function createCareSchedule(input: CareScheduleInput) {
     .insert({
       baby_id: input.baby_id,
       care_type_id: input.care_type_id,
-      label: input.label,
-      quantite_prevue: input.quantite_prevue,
-      unite: input.unite,
-      frequence_type: input.frequence_type,
+      frequency_type: mapFrequencyType(input.frequence_type),
       days_of_week: input.frequence_type === 'hebdomadaire' ? input.days_of_week : null,
       valid_from: input.valid_from,
       valid_to: input.valid_to,
       active: input.active,
+      default_quantity: input.quantite_prevue,
+      default_unit: input.unite,
+      times_per_day: input.times.length,
       created_by: user?.id,
     })
     .select()
@@ -83,9 +114,12 @@ export async function createCareSchedule(input: CareScheduleInput) {
   if (scheduleError) throw new Error(scheduleError.message)
 
   if (input.times.length > 0) {
-    const timesToInsert = input.times.map((t) => ({
+    const timesToInsert = input.times.map((t, index) => ({
       care_schedule_id: schedule.id,
-      scheduled_time: t,
+      time_of_day: t,
+      label: input.label,
+      quantity: input.quantite_prevue,
+      sort_order: index,
     }))
 
     const { error: timesError } = await supabase
@@ -107,20 +141,20 @@ export async function updateCareSchedule(input: CareScheduleInput) {
     .from('care_schedules')
     .update({
       care_type_id: input.care_type_id,
-      label: input.label,
-      quantite_prevue: input.quantite_prevue,
-      unite: input.unite,
-      frequence_type: input.frequence_type,
+      frequency_type: mapFrequencyType(input.frequence_type),
       days_of_week: input.frequence_type === 'hebdomadaire' ? input.days_of_week : null,
       valid_from: input.valid_from,
       valid_to: input.valid_to,
       active: input.active,
+      default_quantity: input.quantite_prevue,
+      default_unit: input.unite,
+      times_per_day: input.times.length,
     })
     .eq('id', input.id)
 
   if (scheduleError) throw new Error(scheduleError.message)
 
-  // Remplacer les horaires : supprimer puis recréer (simple et fiable)
+  // Supprimer puis recréer les horaires
   const { error: deleteError } = await supabase
     .from('care_schedule_times')
     .delete()
@@ -129,9 +163,12 @@ export async function updateCareSchedule(input: CareScheduleInput) {
   if (deleteError) throw new Error(deleteError.message)
 
   if (input.times.length > 0) {
-    const timesToInsert = input.times.map((t) => ({
+    const timesToInsert = input.times.map((t, index) => ({
       care_schedule_id: input.id,
-      scheduled_time: t,
+      time_of_day: t,
+      label: input.label,
+      quantity: input.quantite_prevue,
+      sort_order: index,
     }))
 
     const { error: timesError } = await supabase

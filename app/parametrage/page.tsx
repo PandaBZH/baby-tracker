@@ -1,27 +1,31 @@
 import { getBabies, getCareSchedules, getCareTypes } from './actions'
 import ScheduleManager from './ScheduleManager'
+import GenerateActionsButton from './GenerateActionsButton'
 
 export default async function ParametragePage() {
   const babies = await getBabies()
   const careTypes = await getCareTypes()
 
-  // Pour l'instant on prend le premier bébé (à adapter si multi-bébé actif)
   const baby = babies?.[0]
-  const schedules = baby ? await getCareSchedules(baby.id) : []
 
   if (!baby) {
-    return <div className="p-8">Aucun bébé enregistré.</div>
+    return <p>Aucun bebe trouve.</p>
   }
+
+  const schedules = await getCareSchedules(baby.id)
 
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-8">
-      <h1 className="text-2xl font-bold mb-6">
-        Paramétrage des soins — {baby.first_name}
-      </h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">
+          Parametrage des soins — {baby.first_name}
+        </h1>
+        <GenerateActionsButton />
+      </div>
       <ScheduleManager
         baby={baby}
         careTypes={careTypes}
-        initialSchedules={schedules}
+        initialSchedules={schedules ?? []}
       />
     </div>
   )

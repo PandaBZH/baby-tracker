@@ -13,7 +13,11 @@ export async function getCareLogsForDate(babyId: string, date: string) {
         id,
         default_unit,
         default_quantity,
-        care_types ( id, name, icon )
+        care_types (id, name, icon)
+      ),
+      care_schedule_times (
+        id,
+        label
       )
     `)
     .eq('baby_id', babyId)
@@ -84,5 +88,32 @@ export async function deleteCareLog(logId: string) {
   const supabase = await createClient()
   const { error } = await supabase.from('care_logs').delete().eq('id', logId)
   if (error) throw new Error(error.message)
+  revalidatePath('/')
+}
+
+export async function deleteHistoryEntry(
+  table: 'feedings' | 'diaper_changes' | 'bottles',
+  entryId: string
+) {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error('Non authentifié')
+  }
+
+  const { error } = await supabase
+    .from(table)
+    .delete()
+    .eq('id', entryId)
+
+  if (error) {
+    console.error('Erreur suppression:', error)
+    throw new Error('Impossible de supprimer')
+  }
+
   revalidatePath('/')
 }

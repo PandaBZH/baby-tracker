@@ -8,7 +8,7 @@ type Props = {
   careTypes: any[]
   existing?: any
   onSaved: () => void
-  onCancel: () => void
+  onCancel?: () => void
 }
 
 const joursSemaine = [
@@ -21,27 +21,37 @@ const joursSemaine = [
   { value: 7, label: 'Dimanche' },
 ]
 
-export default function ScheduleForm({ babyId, careTypes, existing, onSaved, onCancel }: Props) {
-  const [careTypeId, setCareTypeId] = useState(existing?.care_type_id ?? careTypes[0]?.id ?? '')
-  const [label, setLabel] = useState(existing?.label ?? '')
-  const [quantitePrevue, setQuantitePrevue] = useState(existing?.quantite_prevue?.toString() ?? '')
-  const [unite, setUnite] = useState(existing?.unite ?? '')
-  const [frequenceType, setFrequenceType] = useState<'quotidien' | 'hebdomadaire' | 'ponctuel'>(
+export default function ScheduleForm({
+  babyId,
+  careTypes,
+  existing,
+  onSaved,
+  onCancel,
+}: Props) {
+  const [careTypeId, setCareTypeId] = useState(existing?.care_type_id ?? careTypes?.[0]?.id ?? '')
+  const [label, setLabel] = useState(
+    existing?.care_schedule_times?.[0]?.label ?? existing?.label ?? ''
+  )
+  const [quantitePrevue, setQuantitePrevue] = useState(existing?.default_quantity ?? '')
+  const [unite, setUnite] = useState(existing?.default_unit ?? '')
+  const [frequenceType, setFrequenceType] = useState(
     existing?.frequence_type ?? 'quotidien'
   )
-  const [daysOfWeek, setDaysOfWeek] = useState<number[]>(existing?.days_of_week ?? [])
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>(
+    existing?.days_of_week ?? []
+  )
   const [validFrom, setValidFrom] = useState(
-    existing?.valid_from ?? new Date().toISOString().slice(0, 10)
+    existing?.valid_from ?? new Date().toISOString().split('T')[0]
   )
   const [validTo, setValidTo] = useState(existing?.valid_to ?? '')
   const [active, setActive] = useState(existing?.active ?? true)
-  const [times, setTimes] = useState<string[]>(
-    existing?.care_schedule_times
-      ?.sort((a: any, b: any) => a.scheduled_time.localeCompare(b.scheduled_time))
-      .map((t: any) => t.scheduled_time.slice(0, 5)) ?? ['08:00']
+  const [error, setError] = useState<string | null>(null)
+  const [times, setTimes] = useState(
+    (existing?.care_schedule_times ?? [])
+      .map((t: any) => t.time_of_day?.slice(0, 5) ?? '')
+      .filter(Boolean)
   )
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   function addTime() {
     setTimes([...times, '12:00'])
@@ -59,7 +69,7 @@ export default function ScheduleForm({ babyId, careTypes, existing, onSaved, onC
 
   function toggleDay(day: number) {
     setDaysOfWeek((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort()
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
     )
   }
 
@@ -67,10 +77,18 @@ export default function ScheduleForm({ babyId, careTypes, existing, onSaved, onC
     e.preventDefault()
     setError(null)
 
-    if (!label.trim()) return setError('Le libellé est requis')
-    if (times.length === 0) return setError('Au moins un horaire est requis')
-    if (frequenceType === 'hebdomadaire' && daysOfWeek.length === 0)
-      return setError('Sélectionnez au moins un jour de la semaine')
+    if (!careTypeId) {
+      setError('Veuillez sélectionner un type de soin.')
+      return
+    }
+    if (!label.trim()) {
+      setError('Veuillez saisir un libellé.')
+      return
+    }
+    if (times.length === 0) {
+      setError('Veuillez ajouter au moins un horaire.')
+      return
+    }
 
     setSaving(true)
     try {
@@ -79,9 +97,9 @@ export default function ScheduleForm({ babyId, careTypes, existing, onSaved, onC
         baby_id: babyId,
         care_type_id: careTypeId,
         label: label.trim(),
-        quantite_prevue: quantitePrevue ? parseFloat(quantitePrevue) : null,
+        quantite_prevue: quantitePrevue !== '' ? Number(quantitePrevue) : null,
         unite: unite.trim() || null,
-        frequence_type: frequenceType,
+        frequence_type: frequenceType as CareScheduleInput['frequence_type'],
         days_of_week: frequenceType === 'hebdomadaire' ? daysOfWeek : null,
         valid_from: validFrom,
         valid_to: validTo || null,
@@ -105,10 +123,12 @@ export default function ScheduleForm({ babyId, careTypes, existing, onSaved, onC
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <h2 className="font-semibold text-lg">
-        {existing ? 'Modifier le paramétrage' : 'Nouveau paramétrage'}
+        {existing ? 'Modifier le soin planifié' : 'Nouveau soin planifié'}
       </h2>
 
-      {error && <div className="text-red-600 text-sm">{error}</div>}
+      {error && (
+        <p className="text-red-600 text-sm bg-red-50 p-2 rounded">{error}</p>
+      )}
 
       <div>
         <label className="block text-sm font-medium mb-1">Type de soin</label>
@@ -117,19 +137,22 @@ export default function ScheduleForm({ babyId, careTypes, existing, onSaved, onC
           onChange={(e) => setCareTypeId(e.target.value)}
           className="w-full border rounded px-3 py-2"
         >
+          <option value="">— Sélectionner —</option>
           {careTypes.map((ct) => (
-            <option key={ct.id} value={ct.id}>{ct.label}</option>
+            <option key={ct.id} value={ct.id}>
+              {ct.name}
+            </option>
           ))}
         </select>
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">Libellé</label>
+        <label className="block text-sm font-medium mb-1">Libellé du soin</label>
         <input
           type="text"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="Ex: Biberon du matin"
+          placeholder="Ex: Biberon du matin, Vitamine D"
           className="w-full border rounded px-3 py-2"
         />
       </div>
@@ -162,27 +185,27 @@ export default function ScheduleForm({ babyId, careTypes, existing, onSaved, onC
         <label className="block text-sm font-medium mb-1">Fréquence</label>
         <select
           value={frequenceType}
-          onChange={(e) => setFrequenceType(e.target.value as any)}
+          onChange={(e) => setFrequenceType(e.target.value)}
           className="w-full border rounded px-3 py-2"
         >
           <option value="quotidien">Quotidien</option>
-          <option value="hebdomadaire">Hebdomadaire (jours précis)</option>
           <option value="ponctuel">Ponctuel</option>
+          <option value="hebdomadaire">Hebdomadaire</option>
         </select>
       </div>
 
       {frequenceType === 'hebdomadaire' && (
         <div>
-          <label className="block text-sm font-medium mb-1">Jours concernés</label>
+          <label className="block text-sm font-medium mb-1">Jours de la semaine</label>
           <div className="flex flex-wrap gap-2">
             {joursSemaine.map((j) => (
               <button
                 type="button"
                 key={j.value}
                 onClick={() => toggleDay(j.value)}
-                className={`px-3 py-1 rounded-full text-sm border ${
+                className={`px-3 py-1 rounded border text-sm ${
                   daysOfWeek.includes(j.value)
-                    ? 'bg-blue-600 text-white border-blue-600'
+                    ? 'bg-purple-600 text-white'
                     : 'bg-white text-gray-700'
                 }`}
               >
@@ -218,7 +241,7 @@ export default function ScheduleForm({ babyId, careTypes, existing, onSaved, onC
           <button
             type="button"
             onClick={addTime}
-            className="text-sm text-blue-600 hover:underline"
+            className="text-purple-600 text-sm"
           >
             + Ajouter un horaire
           </button>
@@ -236,7 +259,7 @@ export default function ScheduleForm({ babyId, careTypes, existing, onSaved, onC
           />
         </div>
         <div className="flex-1">
-          <label className="block text-sm font-medium mb-1">Valide jusqu'au (optionnel)</label>
+          <label className="block text-sm font-medium mb-1">Valide jusqu'au</label>
           <input
             type="date"
             value={validTo}
@@ -260,17 +283,19 @@ export default function ScheduleForm({ babyId, careTypes, existing, onSaved, onC
         <button
           type="submit"
           disabled={saving}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          className="bg-purple-600 text-white px-4 py-2 rounded disabled:opacity-50"
         >
-          {saving ? 'Enregistrement...' : 'Enregistrer'}
+          {saving ? 'Enregistrement…' : existing ? 'Mettre à jour' : 'Créer'}
         </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 rounded-lg border hover:bg-gray-100"
-        >
-          Annuler
-        </button>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="bg-gray-200 text-gray-700 px-4 py-2 rounded"
+          >
+            Annuler
+          </button>
+        )}
       </div>
     </form>
   )
