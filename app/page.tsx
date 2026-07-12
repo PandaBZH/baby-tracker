@@ -136,7 +136,6 @@ export default function HomePage() {
           logged_at,
           care_schedules!inner(
             id,
-            label,
             default_quantity,
             default_unit,
             care_types!inner(
