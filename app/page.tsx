@@ -4,13 +4,25 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { getCareLogsForDate } from '@/app/dashboard/actions'
-import { quickCheck, uncheckLog, deleteHistoryEntry } from '@/app/dashboard/actions'
+import { 
+  getCareLogsForDate,
+  getPlannedCareTypes,
+  getPlannedCareForDate,
+  logPlannedCare,
+  removePlannedCareLog,
+  quickCheck, 
+  uncheckLog, 
+  deleteHistoryEntry 
+} from '@/app/dashboard/actions'
 
 interface Baby {
   id: string
   first_name: string
   birth_date: string | null
+}
+
+interface Family {
+  id: string
 }
 
 interface CareLog {
@@ -37,6 +49,12 @@ interface CareLog {
   } | null
 }
 
+interface CareType {
+  id: string
+  name: string
+  icon: string | null
+}
+
 interface HistoryEntry {
   id: string
   type: 'feeding' | 'diaper' | 'bottle' | 'temperature'
@@ -48,11 +66,16 @@ interface HistoryEntry {
 export default function HomePage() {
   const supabase = createClient()
   const [baby, setBaby] = useState<Baby | null>(null)
+  const [family, setFamily] = useState<Family | null>(null)
   const [careLogs, setCareLogs] = useState<CareLog[]>([])
+  const [plannedCares, setPlannedCares] = useState<CareType[]>([])
+  const [checkedPlannedCares, setCheckedPlannedCares] = useState<string[]>([])
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [newCareName, setNewCareName] = useState('')
+  const [showAddCareForm, setShowAddCareForm] = useState(false)
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -74,6 +97,8 @@ export default function HomePage() {
           setError('Pas de famille')
           return
         }
+
+        setFamily({ id: profile.family_id })
 
         // Récupère le bébé
         const { data: babies } = await supabase
@@ -97,6 +122,14 @@ export default function HomePage() {
           const timeB = b.scheduled_time || '00:00'
           return timeA.localeCompare(timeB)
         }) || [])
+
+        // Récupère les types de soins disponibles
+        const careTypes = await getPlannedCareTypes(profile.family_id)
+        setPlannedCares(careTypes)
+
+        // Récupère les soins planifiés cochés pour aujourd'hui
+        const checkedCares = await getPlannedCareForDate(babyData.id, today)
+        setCheckedPlannedCares(checkedCares)
 
         // Récupère l'historique du jour (ordre décroissant)
         const { data: feedings } = await supabase
@@ -172,7 +205,7 @@ export default function HomePage() {
   }, [])
 
   if (loading) return <div className="p-8">Chargement...</div>
-  if (!baby) return <div className="p-8">{error}</div>
+  if (!baby || !family) return <div className="p-8">{error}</div>
 
   const handleQuickCheck = async (logId: string) => {
     await quickCheck(logId, null)
@@ -188,6 +221,18 @@ export default function HomePage() {
       l.id === logId ? { ...l, fait: false, done_at: null } : l
     )
     setCareLogs(updated)
+  }
+
+  const handleTogglePlannedCare = async (careId: string) => {
+    if (checkedPlannedCares.includes(careId)) {
+      // Décocher
+      await removePlannedCareLog(baby.id, careId, today)
+      setCheckedPlannedCares(checkedPlannedCares.filter(id => id !== careId))
+    } else {
+      // Cocher
+      await logPlannedCare(baby.id, careId, today)
+      setCheckedPlannedCares([...checkedPlannedCares, careId])
+    }
   }
 
   const handleDeleteHistory = async (entryId: string, table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures') => {
@@ -253,7 +298,7 @@ export default function HomePage() {
       {/* 📋 SOINS PLANIFIÉS (ordre croissant) */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="font-bold text-lg">📋 SOINS PLANIFIÉS</h2>
+          <h2 className="font-bold text-lg">📋 A FAIRE AUJOURD'HUI</h2>
           <Link
             href={`/parametrage`}
             className="text-2xl hover:opacity-70 transition"
@@ -301,7 +346,83 @@ export default function HomePage() {
             })}
           </ul>
         ) : (
-          <p className="text-gray-500 italic">Aucun soin planifié</p>
+          <p className="text-gray-500 italic">Aucun tâche aujourd'hui</p>
+        )}
+      </section>
+
+      {/* 🛁 SOINS GÉNÉRAUX (généraliste) */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-lg flex items-center gap-2">
+            <span>🛁 Soins généraux</span>
+            <span className="text-sm text-gray-500">⚙️</span>
+          </h2>
+        </div>
+        {plannedCares.length > 0 ? (
+          <div className="space-y-2">
+            {plannedCares.map((care) => (
+              <label
+                key={care.id}
+                className={`rounded-lg p-3 flex items-center gap-3 cursor-pointer transition ${
+                  checkedPlannedCares.includes(care.id)
+                    ? 'bg-green-50 border-2 border-green-300'
+                    : 'bg-white border-2 border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checkedPlannedCares.includes(care.id)}
+                  onChange={() => handleTogglePlannedCare(care.id)}
+                  className="w-5 h-5 cursor-pointer"
+                />
+                <span className="text-2xl">{care.icon || '✓'}</span>
+                <span className="font-medium flex-1">{care.name}</span>
+              </label>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-500 italic">Aucun soin configuré</p>
+        )}
+
+        {/* Bouton ajouter soin ad hoc */}
+        {!showAddCareForm ? (
+          <button
+            onClick={() => setShowAddCareForm(true)}
+            className="text-sm text-blue-600 hover:text-blue-800 font-medium mt-3"
+          >
+            + Ajouter un soin ad hoc
+          </button>
+        ) : (
+          <div className="border rounded-lg p-3 mt-3 bg-blue-50 space-y-2">
+            <input
+              type="text"
+              value={newCareName}
+              onChange={(e) => setNewCareName(e.target.value)}
+              placeholder="Ex: Coupe d'ongles, Nettoyage nez..."
+              className="w-full border rounded-lg p-2 text-sm"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  // TODO: Implémenter la sauvegarde du soin ad hoc
+                  setShowAddCareForm(false)
+                  setNewCareName('')
+                }}
+                className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+              >
+                ✓ Ajouter
+              </button>
+              <button
+                onClick={() => {
+                  setShowAddCareForm(false)
+                  setNewCareName('')
+                }}
+                className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-50"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
         )}
       </section>
 

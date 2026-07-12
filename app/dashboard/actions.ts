@@ -118,3 +118,100 @@ export async function deleteHistoryEntry(
 
   revalidatePath('/')
 }
+
+// Ajoute ces fonctions à la fin de ton actions.ts existant
+
+export async function getPlannedCareTypes(familyId: string) {
+  const supabase = await createClient()
+
+  const { data } = await supabase
+    .from('care_schedules')
+    .select('care_types(id, name, icon)')
+    .eq('family_id', familyId)
+    .neq('care_types', null)
+
+  // Dédupliquer les soins
+  const uniqueCares = Array.from(
+    new Map(
+      data?.map((schedule: any) => [
+        schedule.care_types?.id,
+        {
+          id: schedule.care_types?.id,
+          name: schedule.care_types?.name,
+          icon: schedule.care_types?.icon,
+        },
+      ]) || []
+    ).values()
+  )
+
+  return uniqueCares
+}
+
+export async function logPlannedCare(
+  babyId: string,
+  careId: string,
+  date: string
+) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) throw new Error('Non authentifié')
+
+  const loggedAt = new Date(`${date}T12:00:00`).toISOString()
+
+  const { error } = await supabase.from('planned_care_logs').insert({
+    baby_id: babyId,
+    care_id: careId,
+    logged_at: loggedAt,
+    created_by: user.id,
+  })
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/')
+}
+
+export async function removePlannedCareLog(
+  babyId: string,
+  careId: string,
+  date: string
+) {
+  const supabase = await createClient()
+
+  const startDate = new Date(date).toISOString()
+  const endDate = new Date(
+    new Date(date).getTime() + 24 * 60 * 60 * 1000
+  ).toISOString()
+
+  const { error } = await supabase
+    .from('planned_care_logs')
+    .delete()
+    .eq('baby_id', babyId)
+    .eq('care_id', careId)
+    .gte('logged_at', startDate)
+    .lt('logged_at', endDate)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/')
+}
+
+export async function getPlannedCareForDate(babyId: string, date: string) {
+  const supabase = await createClient()
+
+  const startDate = new Date(date).toISOString()
+  const endDate = new Date(
+    new Date(date).getTime() + 24 * 60 * 60 * 1000
+  ).toISOString()
+
+  const { data } = await supabase
+    .from('planned_care_logs')
+    .select('care_id')
+    .eq('baby_id', babyId)
+    .gte('logged_at', startDate)
+    .lt('logged_at', endDate)
+
+  return data?.map((log) => log.care_id) || []
+}
