@@ -168,9 +168,10 @@ export async function logPlannedCare(
   revalidatePath('/')
 }
 
+// ✅ BON
 export async function removePlannedCareLog(
   babyId: string,
-  careId: string,
+  careScheduleId: string,  // ← Renomme pour clarifier
   loggedAt: string
 ) {
   const supabase = await createClient()
@@ -179,7 +180,7 @@ export async function removePlannedCareLog(
     .from('planned_care_logs')
     .delete()
     .eq('baby_id', babyId)
-    .eq('care_id', careId)
+    .eq('care_schedule_id', careScheduleId)  // ← Change ici aussi
     .eq('logged_at', loggedAt)
 
   if (error) throw new Error(error.message)
