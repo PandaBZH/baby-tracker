@@ -62,8 +62,8 @@ interface HistoryEntry {
   data: any
   table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures' | 'planned_care_logs'
   label?: string
-  quantity?: number
-  unit?: string
+  quantity?: number | null
+  unit?: string | null
 }
 
 interface PlannedCareLogRow {
