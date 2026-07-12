@@ -195,12 +195,20 @@ export async function getPlannedCareForDate(babyId: string, date: string) {
     new Date(date).getTime() + 24 * 60 * 60 * 1000
   ).toISOString()
 
-  const { data } = await supabase
+  console.log('Query params:', { babyId, startDate, endDate })
+
+  const { data, error } = await supabase
     .from('planned_care_logs')
     .select('care_schedule_id') 
     .eq('baby_id', babyId)
     .gte('logged_at', startDate)
     .lt('logged_at', endDate)
 
-  return data?.map((log) => log.care_schedule_id) || []  
+  if (error) {
+    console.error('DB Error:', error)
+    throw new Error(error.message)
+  }
+
+  console.log('Planned care data:', data)
+  return data?.map((log: any) => log.care_schedule_id) || []  
 }
