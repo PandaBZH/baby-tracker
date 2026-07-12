@@ -2,8 +2,6 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { redirect } from 'next/navigation'
-import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
 
 export default function NewTemperaturePage({
@@ -42,7 +40,8 @@ export default function NewTemperaturePage({
       } = await supabase.auth.getUser()
 
       if (!user) {
-        redirect('/login')
+        window.location.href = '/login'
+        return
       }
 
       const { data: profile } = await supabase
@@ -77,7 +76,7 @@ export default function NewTemperaturePage({
 
       if (error) throw error
 
-      revalidatePath('/')
+      // Redirection simple au lieu de revalidatePath
       window.location.href = '/'
     } catch (error) {
       console.error('Erreur:', error)
