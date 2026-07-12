@@ -148,7 +148,7 @@ export default function HomePage() {
         .eq('baby_id', babyId)
         .gte('logged_at', `${today}T00:00:00`)
         .lte('logged_at', `${today}T23:59:59`)
-
+console.log('PLANNED CARE LOGS DATA:', plannedCareLogsData)
       // Combine et trie par timestamp décroissant
       const allHistory: HistoryEntry[] = [
         ...(feedings || []).map(f => ({
