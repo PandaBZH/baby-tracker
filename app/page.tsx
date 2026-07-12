@@ -83,35 +83,33 @@ export default function HomePage() {
   const today = new Date().toISOString().split('T')[0]
 
   // Fonction pour récupérer l'historique complet
-  const fetchHistory = async () => {
+  const fetchHistory = async (babyId: string) => {
     try {
-      if (!baby) return
-
       const { data: feedings } = await supabase
         .from('feedings')
         .select('*')
-        .eq('baby_id', baby.id)
+        .eq('baby_id', babyId)
         .gte('fed_at', `${today}T00:00:00`)
         .lte('fed_at', `${today}T23:59:59`)
 
       const { data: diapers } = await supabase
         .from('diaper_changes')
         .select('*')
-        .eq('baby_id', baby.id)
+        .eq('baby_id', babyId)
         .gte('changed_at', `${today}T00:00:00`)
         .lte('changed_at', `${today}T23:59:59`)
 
       const { data: bottles } = await supabase
         .from('bottles')
         .select('*')
-        .eq('baby_id', baby.id)
+        .eq('baby_id', babyId)
         .gte('given_at', `${today}T00:00:00`)
         .lte('given_at', `${today}T23:59:59`)
 
       const { data: temperatures } = await supabase
         .from('temperatures')
         .select('*')
-        .eq('baby_id', baby.id)
+        .eq('baby_id', babyId)
         .gte('measured_at', `${today}T00:00:00`)
         .lte('measured_at', `${today}T23:59:59`)
 
@@ -125,14 +123,14 @@ export default function HomePage() {
             label,
             default_quantity,
             default_unit,
-            care_types(
+            care_types!inner(
               id,
               name,
               icon
             )
           )
         `)
-        .eq('baby_id', baby.id)
+        .eq('baby_id', babyId)
         .gte('logged_at', `${today}T00:00:00`)
         .lte('logged_at', `${today}T23:59:59`)
 
@@ -167,9 +165,11 @@ export default function HomePage() {
           table: 'temperatures' as const,
         })),
         ...(plannedCareLogsData || []).map(pc => {
-          const careType = pc.care_schedules?.care_types
+          const careType = Array.isArray(pc.care_schedules?.care_types)
+            ? pc.care_schedules?.care_types[0]
+            : pc.care_schedules?.care_types
           const label = pc.care_schedules?.label || careType?.name || 'Soin'
-          
+
           return {
             id: pc.id,
             type: 'planned_care' as const,
@@ -240,6 +240,9 @@ export default function HomePage() {
         // Récupère les soins planifiés cochés pour aujourd'hui
         const checkedCares = await getPlannedCareForDate(babyData.id, today)
         setCheckedPlannedCares(checkedCares)
+
+        // Récupère l'historique
+        await fetchHistory(babyData.id)
       } catch (err) {
         console.error(err)
         setError('Erreur')
@@ -251,13 +254,6 @@ export default function HomePage() {
     init()
   }, [])
 
-  // Récupère l'historique une fois que le baby est chargé
-  useEffect(() => {
-    if (baby) {
-      fetchHistory()
-    }
-  }, [baby])
-
   if (loading) return <div className="p-8">Chargement...</div>
   if (!baby || !family) return <div className="p-8">{error}</div>
 
@@ -268,7 +264,7 @@ export default function HomePage() {
         l.id === logId ? { ...l, fait: true, done_at: new Date().toISOString() } : l
       )
       setCareLogs(updated)
-      await fetchHistory()
+      await fetchHistory(baby.id)
     } catch (err) {
       console.error(err)
       alert('Erreur lors du check')
@@ -282,7 +278,7 @@ export default function HomePage() {
         l.id === logId ? { ...l, fait: false, done_at: null } : l
       )
       setCareLogs(updated)
-      await fetchHistory()
+      await fetchHistory(baby.id)
     } catch (err) {
       console.error(err)
       alert('Erreur lors du uncheck')
@@ -300,7 +296,7 @@ export default function HomePage() {
         await logPlannedCare(baby.id, careId, today)
         setCheckedPlannedCares([...checkedPlannedCares, careId])
       }
-      await fetchHistory()
+      await fetchHistory(baby.id)
     } catch (err) {
       console.error(err)
       alert('Erreur lors du toggle')
