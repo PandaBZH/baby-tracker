@@ -1,10 +1,11 @@
 import type { Metadata } from 'next'
 import './globals.css'
 
-export const metadata: Metadata = {
-  title: 'Bébé Tracker',
-  description: 'Suivi quotidien de bébé',
-    themeColor: '#ffffff',
+export const metadata = {
+  title: 'Baby Tracker',
+  manifest: '/manifest.json',
+  themeColor: '#ffffff',
+  colorScheme: 'light', // Force le thème clair
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
