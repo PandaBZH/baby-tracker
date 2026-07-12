@@ -66,6 +66,22 @@ interface HistoryEntry {
   unit?: string
 }
 
+interface PlannedCareLogRow {
+  id: string
+  logged_at: string
+  care_schedules: {
+    id: string
+    label: string | null
+    default_quantity: number | null
+    default_unit: string | null
+    care_types: Array<{
+      id: string
+      name: string
+      icon: string | null
+    }>
+  } | null
+}
+
 export default function HomePage() {
   const supabase = createClient()
   const [baby, setBaby] = useState<Baby | null>(null)
@@ -164,10 +180,8 @@ export default function HomePage() {
           data: t,
           table: 'temperatures' as const,
         })),
-        ...(plannedCareLogsData || []).map(pc => {
-          const careType = Array.isArray(pc.care_schedules?.care_types)
-            ? pc.care_schedules?.care_types[0]
-            : pc.care_schedules?.care_types
+        ...((plannedCareLogsData as PlannedCareLogRow[] | null) || []).map(pc => {
+          const careType = pc.care_schedules?.care_types?.[0]
           const label = pc.care_schedules?.label || careType?.name || 'Soin'
 
           return {
