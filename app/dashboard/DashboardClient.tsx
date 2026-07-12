@@ -98,20 +98,27 @@ export default function DashboardClient({ baby, date, initialLogs }: Props) {
     }
   }
 
-  const handleAdjust = async (logId: string, newQuantity: number | null) => {
+    const handleAdjust = async (
+    logId: string,
+    doneAtIso: string,
+    newQuantity: number | null,
+    note: string | null
+    ) => {
     setLoadingId(logId)
     try {
-      await adjustCheck(logId, newQuantity)
-      setLogs((prev) =>
+        await adjustCheck(logId, doneAtIso, newQuantity, note)
+        setLogs((prev) =>
         prev.map((l) =>
-          l.id === logId ? { ...l, quantity: newQuantity } : l
+            l.id === logId
+            ? { ...l, fait: true, done_at: doneAtIso, quantity: newQuantity, note }
+            : l
         )
-      )
-      setAdjustingLog(null)
+        )
+        setAdjustingLog(null)
     } finally {
-      setLoadingId(null)
+        setLoadingId(null)
     }
-  }
+    }
 
   const formatTime = (time: string | null) => {
     if (!time) return ''
@@ -205,14 +212,19 @@ export default function DashboardClient({ baby, date, initialLogs }: Props) {
       {/* Modal d'ajustement */}
       {adjustingLog && (
         <AdjustModal
-          log={adjustingLog}
-          unit={getUnit(adjustingLog)}
-          onClose={() => setAdjustingLog(null)}
-          onSaved={(newQuantity) =>
-            handleAdjust(adjustingLog.id, newQuantity)
-          }
+            log={adjustingLog}
+            unit={getUnit(adjustingLog)}
+            onClose={() => setAdjustingLog(null)}
+            onSaved={(logId, updates) =>
+            handleAdjust(
+                logId,
+                updates.done_at ?? new Date().toISOString(),
+                updates.quantity,
+                updates.note ?? null
+            )
+            }
         />
-      )}
+        )}
     </div>
   )
 }

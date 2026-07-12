@@ -46,7 +46,7 @@ export default function ScheduleForm({
   const [validTo, setValidTo] = useState(existing?.valid_to ?? '')
   const [active, setActive] = useState(existing?.active ?? true)
   const [error, setError] = useState<string | null>(null)
-  const [times, setTimes] = useState(
+  const [times, setTimes] = useState<string[]>(
     (existing?.care_schedule_times ?? [])
       .map((t: any) => t.time_of_day?.slice(0, 5) ?? '')
       .filter(Boolean)

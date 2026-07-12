@@ -69,7 +69,6 @@ export async function adjustCheck(
   if (error) throw new Error(error.message)
   revalidatePath('/')
 }
-}
 
 export async function uncheckLog(logId: string) {
   const supabase = await createClient()
@@ -94,7 +93,7 @@ export async function deleteCareLog(logId: string) {
 }
 
 export async function deleteHistoryEntry(
-  table: 'feedings' | 'diaper_changes' | 'bottles',
+  table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures',
   entryId: string
 ) {
   const supabase = await createClient()
