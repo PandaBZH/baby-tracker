@@ -57,10 +57,13 @@ interface CareType {
 
 interface HistoryEntry {
   id: string
-  type: 'feeding' | 'diaper' | 'bottle' | 'temperature'
+  type: 'feeding' | 'diaper' | 'bottle' | 'temperature' | 'planned_care'
   timestamp: string
   data: any
-  table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures'
+  table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures' | 'planned_care_logs'
+  label?: string
+  quantity?: number
+  unit?: string
 }
 
 export default function HomePage() {
@@ -78,6 +81,113 @@ export default function HomePage() {
   const [showAddCareForm, setShowAddCareForm] = useState(false)
 
   const today = new Date().toISOString().split('T')[0]
+
+  // Fonction pour récupérer l'historique complet
+  const fetchHistory = async () => {
+    try {
+      if (!baby) return
+
+      const { data: feedings } = await supabase
+        .from('feedings')
+        .select('*')
+        .eq('baby_id', baby.id)
+        .gte('fed_at', `${today}T00:00:00`)
+        .lte('fed_at', `${today}T23:59:59`)
+
+      const { data: diapers } = await supabase
+        .from('diaper_changes')
+        .select('*')
+        .eq('baby_id', baby.id)
+        .gte('changed_at', `${today}T00:00:00`)
+        .lte('changed_at', `${today}T23:59:59`)
+
+      const { data: bottles } = await supabase
+        .from('bottles')
+        .select('*')
+        .eq('baby_id', baby.id)
+        .gte('given_at', `${today}T00:00:00`)
+        .lte('given_at', `${today}T23:59:59`)
+
+      const { data: temperatures } = await supabase
+        .from('temperatures')
+        .select('*')
+        .eq('baby_id', baby.id)
+        .gte('measured_at', `${today}T00:00:00`)
+        .lte('measured_at', `${today}T23:59:59`)
+
+      const { data: plannedCareLogsData } = await supabase
+        .from('planned_care_logs')
+        .select(`
+          id,
+          logged_at,
+          care_schedules!inner(
+            id,
+            label,
+            default_quantity,
+            default_unit,
+            care_types(
+              id,
+              name,
+              icon
+            )
+          )
+        `)
+        .eq('baby_id', baby.id)
+        .gte('logged_at', `${today}T00:00:00`)
+        .lte('logged_at', `${today}T23:59:59`)
+
+      // Combine et trie par timestamp décroissant
+      const allHistory: HistoryEntry[] = [
+        ...(feedings || []).map(f => ({
+          id: f.id,
+          type: 'feeding' as const,
+          timestamp: f.fed_at,
+          data: f,
+          table: 'feedings' as const,
+        })),
+        ...(diapers || []).map(d => ({
+          id: d.id,
+          type: 'diaper' as const,
+          timestamp: d.changed_at,
+          data: d,
+          table: 'diaper_changes' as const,
+        })),
+        ...(bottles || []).map(b => ({
+          id: b.id,
+          type: 'bottle' as const,
+          timestamp: b.given_at,
+          data: b,
+          table: 'bottles' as const,
+        })),
+        ...(temperatures || []).map(t => ({
+          id: t.id,
+          type: 'temperature' as const,
+          timestamp: t.measured_at,
+          data: t,
+          table: 'temperatures' as const,
+        })),
+        ...(plannedCareLogsData || []).map(pc => {
+          const careType = pc.care_schedules?.care_types
+          const label = pc.care_schedules?.label || careType?.name || 'Soin'
+          
+          return {
+            id: pc.id,
+            type: 'planned_care' as const,
+            timestamp: pc.logged_at,
+            data: pc,
+            table: 'planned_care_logs' as const,
+            label,
+            quantity: pc.care_schedules?.default_quantity,
+            unit: pc.care_schedules?.default_unit,
+          }
+        }),
+      ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+
+      setHistory(allHistory)
+    } catch (err) {
+      console.error('Erreur historique:', err)
+    }
+  }
 
   useEffect(() => {
     const init = async () => {
@@ -130,69 +240,6 @@ export default function HomePage() {
         // Récupère les soins planifiés cochés pour aujourd'hui
         const checkedCares = await getPlannedCareForDate(babyData.id, today)
         setCheckedPlannedCares(checkedCares)
-
-        // Récupère l'historique du jour (ordre décroissant)
-        const { data: feedings } = await supabase
-          .from('feedings')
-          .select('*')
-          .eq('baby_id', babyData.id)
-          .gte('fed_at', `${today}T00:00:00`)
-          .lte('fed_at', `${today}T23:59:59`)
-
-        const { data: diapers } = await supabase
-          .from('diaper_changes')
-          .select('*')
-          .eq('baby_id', babyData.id)
-          .gte('changed_at', `${today}T00:00:00`)
-          .lte('changed_at', `${today}T23:59:59`)
-
-        const { data: bottles } = await supabase
-          .from('bottles')
-          .select('*')
-          .eq('baby_id', babyData.id)
-          .gte('given_at', `${today}T00:00:00`)
-          .lte('given_at', `${today}T23:59:59`)
-
-        const { data: temperatures } = await supabase
-          .from('temperatures')
-          .select('*')
-          .eq('baby_id', babyData.id)
-          .gte('measured_at', `${today}T00:00:00`)
-          .lte('measured_at', `${today}T23:59:59`)
-
-        // Combine et trie par timestamp décroissant
-        const allHistory: HistoryEntry[] = [
-          ...(feedings || []).map(f => ({
-            id: f.id,
-            type: 'feeding' as const,
-            timestamp: f.fed_at,
-            data: f,
-            table: 'feedings' as const,
-          })),
-          ...(diapers || []).map(d => ({
-            id: d.id,
-            type: 'diaper' as const,
-            timestamp: d.changed_at,
-            data: d,
-            table: 'diaper_changes' as const,
-          })),
-          ...(bottles || []).map(b => ({
-            id: b.id,
-            type: 'bottle' as const,
-            timestamp: b.given_at,
-            data: b,
-            table: 'bottles' as const,
-          })),
-          ...(temperatures || []).map(t => ({
-            id: t.id,
-            type: 'temperature' as const,
-            timestamp: t.measured_at,
-            data: t,
-            table: 'temperatures' as const,
-          })),
-        ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-
-        setHistory(allHistory)
       } catch (err) {
         console.error(err)
         setError('Erreur')
@@ -204,38 +251,63 @@ export default function HomePage() {
     init()
   }, [])
 
+  // Récupère l'historique une fois que le baby est chargé
+  useEffect(() => {
+    if (baby) {
+      fetchHistory()
+    }
+  }, [baby])
+
   if (loading) return <div className="p-8">Chargement...</div>
   if (!baby || !family) return <div className="p-8">{error}</div>
 
   const handleQuickCheck = async (logId: string) => {
-    await quickCheck(logId, null)
-    const updated = careLogs.map(l =>
-      l.id === logId ? { ...l, fait: true, done_at: new Date().toISOString() } : l
-    )
-    setCareLogs(updated)
-  }
-
-  const handleUncheck = async (logId: string) => {
-    await uncheckLog(logId)
-    const updated = careLogs.map(l =>
-      l.id === logId ? { ...l, fait: false, done_at: null } : l
-    )
-    setCareLogs(updated)
-  }
-
-  const handleTogglePlannedCare = async (careId: string) => {
-    if (checkedPlannedCares.includes(careId)) {
-      // Décocher
-      await removePlannedCareLog(baby.id, careId, today)
-      setCheckedPlannedCares(checkedPlannedCares.filter(id => id !== careId))
-    } else {
-      // Cocher
-      await logPlannedCare(baby.id, careId, today)
-      setCheckedPlannedCares([...checkedPlannedCares, careId])
+    try {
+      await quickCheck(logId, null)
+      const updated = careLogs.map(l =>
+        l.id === logId ? { ...l, fait: true, done_at: new Date().toISOString() } : l
+      )
+      setCareLogs(updated)
+      await fetchHistory()
+    } catch (err) {
+      console.error(err)
+      alert('Erreur lors du check')
     }
   }
 
-  const handleDeleteHistory = async (entryId: string, table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures') => {
+  const handleUncheck = async (logId: string) => {
+    try {
+      await uncheckLog(logId)
+      const updated = careLogs.map(l =>
+        l.id === logId ? { ...l, fait: false, done_at: null } : l
+      )
+      setCareLogs(updated)
+      await fetchHistory()
+    } catch (err) {
+      console.error(err)
+      alert('Erreur lors du uncheck')
+    }
+  }
+
+  const handleTogglePlannedCare = async (careId: string) => {
+    try {
+      if (checkedPlannedCares.includes(careId)) {
+        // Décocher
+        await removePlannedCareLog(baby.id, careId, today)
+        setCheckedPlannedCares(checkedPlannedCares.filter(id => id !== careId))
+      } else {
+        // Cocher
+        await logPlannedCare(baby.id, careId, today)
+        setCheckedPlannedCares([...checkedPlannedCares, careId])
+      }
+      await fetchHistory()
+    } catch (err) {
+      console.error(err)
+      alert('Erreur lors du toggle')
+    }
+  }
+
+  const handleDeleteHistory = async (entryId: string, table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures' | 'planned_care_logs') => {
     if (!confirm('Supprimer cet enregistrement ?')) return
 
     setDeletingId(entryId)
@@ -474,6 +546,12 @@ export default function HomePage() {
                 }
                 label = `Température ${entry.data.temperature}°C (${typeLabels[entry.data.type]})`
                 note = entry.data.note || ''
+              } else if (entry.type === 'planned_care') {
+                icon = '✓'
+                label = entry.label || 'Soin'
+                if (entry.quantity) {
+                  label += ` ${entry.quantity} ${entry.unit || ''}`
+                }
               }
 
               return (
@@ -494,7 +572,7 @@ export default function HomePage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => handleDeleteHistory(entry.id, entry.table)}
+                    onClick={() => handleDeleteHistory(entry.id, entry.table as any)}
                     disabled={deletingId === entry.id}
                     className="text-red-500 hover:text-red-700 disabled:opacity-50 text-xl font-bold ml-2 flex-shrink-0"
                   >

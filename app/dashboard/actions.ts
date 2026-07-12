@@ -150,16 +150,12 @@ export async function getPlannedCareTypes(familyId: string) {
 export async function logPlannedCare(
   babyId: string,
   careId: string,
-  date: string
+  loggedAt: string
 ) {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) throw new Error('Non authentifié')
-
-  const loggedAt = new Date(`${date}T12:00:00`).toISOString()
 
   const { error } = await supabase.from('planned_care_logs').insert({
     baby_id: babyId,
@@ -169,32 +165,24 @@ export async function logPlannedCare(
   })
 
   if (error) throw new Error(error.message)
-
   revalidatePath('/')
 }
 
 export async function removePlannedCareLog(
   babyId: string,
   careId: string,
-  date: string
+  loggedAt: string
 ) {
   const supabase = await createClient()
-
-  const startDate = new Date(date).toISOString()
-  const endDate = new Date(
-    new Date(date).getTime() + 24 * 60 * 60 * 1000
-  ).toISOString()
 
   const { error } = await supabase
     .from('planned_care_logs')
     .delete()
     .eq('baby_id', babyId)
     .eq('care_id', careId)
-    .gte('logged_at', startDate)
-    .lt('logged_at', endDate)
+    .eq('logged_at', loggedAt)
 
   if (error) throw new Error(error.message)
-
   revalidatePath('/')
 }
 
