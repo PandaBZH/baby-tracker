@@ -196,10 +196,10 @@ export async function getPlannedCareForDate(babyId: string, date: string) {
 
   const { data } = await supabase
     .from('planned_care_logs')
-    .select('care_id')
+    .select('care_schedule_id') 
     .eq('baby_id', babyId)
     .gte('logged_at', startDate)
     .lt('logged_at', endDate)
 
-  return data?.map((log) => log.care_id) || []
+  return data?.map((log) => log.care_schedule_id) || []  
 }
