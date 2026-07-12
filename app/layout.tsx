@@ -4,6 +4,11 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'Bébé Tracker',
   description: 'Suivi quotidien de bébé',
+    themeColor: '#ffffff',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+  },
 }
 
 export default function RootLayout({
