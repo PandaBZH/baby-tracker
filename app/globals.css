@@ -17,6 +17,13 @@
     --background: #0a0a0a;
     --foreground: #ededed;
   }
+  
+  /* Améliorer la lisibilité des boutons en sombre */
+  .bg-pink-200 { @apply bg-pink-600; }
+  .bg-yellow-200 { @apply bg-yellow-600; }
+  .bg-blue-200 { @apply bg-blue-600; }
+  .bg-red-200 { @apply bg-red-600; }
+  .bg-green-200 { @apply bg-green-600; }
 }
 
 html,
