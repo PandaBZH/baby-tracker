@@ -129,26 +129,30 @@ export default function HomePage() {
         .gte('measured_at', `${today}T00:00:00`)
         .lte('measured_at', `${today}T23:59:59`)
 
-      const { data: plannedCareLogsData } = await supabase
-        .from('planned_care_logs')
-        .select(`
-          id,
-          logged_at,
-          care_schedules!inner(
-            id,
-            default_quantity,
-            default_unit,
-            care_types!inner(
-              id,
-              name,
-              icon
-            )
-          )
-        `)
-        .eq('baby_id', babyId)
-        .gte('logged_at', `${today}T00:00:00`)
-        .lte('logged_at', `${today}T23:59:59`)
+      const { data: plannedCareLogsData, error: pcError } = await supabase
+  .from('planned_care_logs')
+  .select(`
+    id,
+    logged_at,
+    care_schedule_id,
+    care_schedules(
+      id,
+      default_quantity,
+      default_unit,
+      care_types(
+        id,
+        name,
+        icon
+      )
+    )
+  `)
+  .eq('baby_id', babyId)
+  .gte('logged_at', `${today}T00:00:00`)
+  .lte('logged_at', `${today}T23:59:59`)
+
 console.log('PLANNED CARE LOGS DATA:', plannedCareLogsData)
+console.log('PC ERROR:', pcError)
+
       // Combine et trie par timestamp décroissant
       const allHistory: HistoryEntry[] = [
         ...(feedings || []).map(f => ({
