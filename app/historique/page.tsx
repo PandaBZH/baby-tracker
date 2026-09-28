@@ -146,6 +146,26 @@ function HistoriquePageContent() {
     return groups
   }, [filteredHistory])
 
+  // Totaux biberons par jour, calculés sur l'historique complet afin qu'ils
+  // restent visibles et exacts même lorsqu'un filtre est actif.
+  const bottleTotalsByDay = useMemo(() => {
+    const totals: Record<string, { count: number; totalMl: number }> = {}
+
+    history.forEach(entry => {
+      if (entry.type !== 'bottle') return
+
+      const day = new Date(entry.timestamp).toISOString().slice(0, 10)
+      if (!totals[day]) {
+        totals[day] = { count: 0, totalMl: 0 }
+      }
+
+      totals[day].count += 1
+      totals[day].totalMl += Number(entry.data.quantity_ml) || 0
+    })
+
+    return totals
+  }, [history])
+
   const handleDelete = async (
     entryId: string,
     table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures'
@@ -250,9 +270,20 @@ function HistoriquePageContent() {
         <div className="space-y-6">
           {Object.entries(groupedByDay).map(([day, entries]) => (
             <section key={day} className="space-y-2">
-              <h3 className="font-bold text-gray-700 sticky top-0 bg-gray-50 py-1 capitalize">
-                {formatDayLabel(day)}
-              </h3>
+              <div className="sticky top-0 bg-gray-50 py-1 space-y-2">
+                <h3 className="font-bold text-gray-700 capitalize">
+                  {formatDayLabel(day)}
+                </h3>
+                <div className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                  <span>🍼</span>
+                  <span className="font-semibold">
+                    {bottleTotalsByDay[day]?.count || 0}{' '}
+                    {(bottleTotalsByDay[day]?.count || 0) > 1 ? 'biberons' : 'biberon'}
+                  </span>
+                  <span className="text-blue-400">•</span>
+                  <span className="font-bold">{bottleTotalsByDay[day]?.totalMl || 0} ml</span>
+                </div>
+              </div>
               <ul className="space-y-2">
                 {entries.map(entry => {
                   const time = new Date(entry.timestamp).toLocaleTimeString('fr-FR', {
