@@ -3,13 +3,13 @@
 import { useState } from 'react'
 import { createDiaper } from './actions'
 import Link from 'next/link'
+import { LocalDateTimeInput } from '@/components/LocalDateTimeInput'
 
 interface NewDiaperFormProps {
   babyId: string
-  localDateTime: string
 }
 
-export function NewDiaperForm({ babyId, localDateTime }: NewDiaperFormProps) {
+export function NewDiaperForm({ babyId }: NewDiaperFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [pipi, setPipi] = useState(false)
@@ -45,11 +45,9 @@ export function NewDiaperForm({ babyId, localDateTime }: NewDiaperFormProps) {
           <label htmlFor="givenAt" className="block text-sm font-medium mb-2">
             Date et heure
           </label>
-          <input
-            type="datetime-local"
+          <LocalDateTimeInput
             id="givenAt"
             name="givenAt"
-            defaultValue={localDateTime}
             required
             className="w-full px-3 py-2 border rounded-lg"
           />
