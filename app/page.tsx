@@ -128,6 +128,9 @@ export default function HomePage() {
           care_schedules (
             default_unit,
             care_types (name, icon)
+          ),
+          care_schedule_times (
+            label
           )
         `)
         .eq('baby_id', babyId)
@@ -475,8 +478,10 @@ export default function HomePage() {
               } else if (entry.type === 'checklist') {
                 const rawCareType = entry.data.care_schedules?.care_types
                 const careType = Array.isArray(rawCareType) ? rawCareType[0] : rawCareType
+                const rawScheduleTime = entry.data.care_schedule_times
+                const scheduleTime = Array.isArray(rawScheduleTime) ? rawScheduleTime[0] : rawScheduleTime
                 icon = careType?.icon || '✅'
-                label = entry.data.note || careType?.name || 'Tâche réalisée'
+                label = scheduleTime?.label || entry.data.note || careType?.name || 'Tâche réalisée'
                 if (entry.data.quantity !== null && entry.data.quantity !== undefined) {
                   const unit = entry.data.care_schedules?.default_unit || ''
                   label += ` • ${entry.data.quantity}${unit ? ` ${unit}` : ''}`
