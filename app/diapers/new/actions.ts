@@ -31,7 +31,7 @@ export async function createDiaper(formData: FormData) {
       baby_id: babyId,
       pipi,
       caca,
-      changed_at: new Date(givenAt).toISOString(),
+      changed_at: givenAt,
       note: note || null,
       created_by: user.id,
     },
