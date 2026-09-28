@@ -49,10 +49,5 @@ export default async function NewDiaperPage() {
     )
   }
 
-  const now = new Date()
-  const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 16)
-
-  return <NewDiaperForm babyId={baby.id} localDateTime={localDateTime} />
+  return <NewDiaperForm babyId={baby.id} />
 }
