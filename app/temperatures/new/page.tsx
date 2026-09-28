@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 
@@ -14,11 +14,15 @@ export default function NewTemperaturePage({
   const [note, setNote] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const now = new Date()
-  const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 16)
-  const [measuredAt, setMeasuredAt] = useState(localDateTime)
+  const [measuredAt, setMeasuredAt] = useState('')
+
+  useEffect(() => {
+    const now = new Date()
+    const pad = (value: number) => String(value).padStart(2, '0')
+    setMeasuredAt(
+      `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`
+    )
+  }, [])
 
   const increaseTemp = () => {
     setTemperature(prev => parseFloat((prev + 0.1).toFixed(1)))
