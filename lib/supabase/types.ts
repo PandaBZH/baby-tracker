@@ -90,3 +90,12 @@ export interface CareLog {
   created_by: string | null
   created_at: string
 }
+
+export interface Note {
+  id: string
+  baby_id: string
+  content: string
+  noted_at: string
+  created_by: string | null
+  created_at: string
+}
