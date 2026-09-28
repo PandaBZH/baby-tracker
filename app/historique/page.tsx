@@ -8,10 +8,10 @@ import { deleteHistoryEntry } from '@/app/dashboard/actions'
 
 interface HistoryEntry {
   id: string
-  type: 'feeding' | 'diaper' | 'bottle' | 'temperature'
+  type: 'feeding' | 'diaper' | 'bottle' | 'temperature' | 'checklist' | 'note'
   timestamp: string
   data: any
-  table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures'
+  table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures' | 'care_logs' | 'notes'
 }
 
 const FILTERS = [
@@ -19,6 +19,8 @@ const FILTERS = [
   { type: 'diaper' as const, label: '🧻 Couche', color: 'yellow' },
   { type: 'bottle' as const, label: '🍼 Biberon', color: 'blue' },
   { type: 'temperature' as const, label: '🌡️ Temp.', color: 'red' },
+  { type: 'note' as const, label: '📝 Note', color: 'purple' },
+  { type: 'checklist' as const, label: '✅ Check-list', color: 'green' },
 ]
 
 function HistoriquePageContent() {
@@ -75,6 +77,29 @@ function HistoriquePageContent() {
           .eq('baby_id', babyId)
           .order('measured_at', { ascending: false })
 
+        const { data: notes } = await supabase
+          .from('notes')
+          .select('*')
+          .eq('baby_id', babyId)
+          .order('noted_at', { ascending: false })
+
+        const { data: checklistLogs } = await supabase
+          .from('care_logs')
+          .select(`
+            id,
+            done_at,
+            note,
+            quantity,
+            care_schedules (
+              default_unit,
+              care_types (name, icon)
+            )
+          `)
+          .eq('baby_id', babyId)
+          .eq('fait', true)
+          .not('done_at', 'is', null)
+          .order('done_at', { ascending: false })
+
         const allHistory: HistoryEntry[] = [
           ...(feedings || []).map(f => ({
             id: f.id,
@@ -103,6 +128,20 @@ function HistoriquePageContent() {
             timestamp: t.measured_at,
             data: t,
             table: 'temperatures' as const,
+          })),
+          ...(notes || []).map(n => ({
+            id: n.id,
+            type: 'note' as const,
+            timestamp: n.noted_at,
+            data: n,
+            table: 'notes' as const,
+          })),
+          ...(checklistLogs || []).map(log => ({
+            id: log.id,
+            type: 'checklist' as const,
+            timestamp: log.done_at as string,
+            data: log,
+            table: 'care_logs' as const,
           })),
         ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
@@ -135,11 +174,19 @@ function HistoriquePageContent() {
     return history.filter(entry => activeFilters.has(entry.type))
   }, [history, activeFilters])
 
-  // Groupement par jour
+  const getLocalDayKey = (timestamp: string) => {
+    const date = new Date(timestamp)
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  // Groupement par jour selon le fuseau horaire de l'utilisateur
   const groupedByDay = useMemo(() => {
     const groups: Record<string, HistoryEntry[]> = {}
     filteredHistory.forEach(entry => {
-      const day = new Date(entry.timestamp).toISOString().slice(0, 10)
+      const day = getLocalDayKey(entry.timestamp)
       if (!groups[day]) groups[day] = []
       groups[day].push(entry)
     })
@@ -154,7 +201,7 @@ function HistoriquePageContent() {
     history.forEach(entry => {
       if (entry.type !== 'bottle') return
 
-      const day = new Date(entry.timestamp).toISOString().slice(0, 10)
+      const day = getLocalDayKey(entry.timestamp)
       if (!totals[day]) {
         totals[day] = { count: 0, totalMl: 0 }
       }
@@ -168,7 +215,7 @@ function HistoriquePageContent() {
 
   const handleDelete = async (
     entryId: string,
-    table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures'
+    table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures' | 'notes'
   ) => {
     if (!confirm('Supprimer cet enregistrement ?')) return
 
@@ -186,8 +233,11 @@ function HistoriquePageContent() {
 
   const formatDayLabel = (day: string) => {
     const date = new Date(day + 'T00:00:00')
-    const today = new Date().toISOString().slice(0, 10)
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    const now = new Date()
+    const today = getLocalDayKey(now.toISOString())
+    const yesterdayDate = new Date(now)
+    yesterdayDate.setDate(now.getDate() - 1)
+    const yesterday = getLocalDayKey(yesterdayDate.toISOString())
 
     if (day === today) return "Aujourd'hui"
     if (day === yesterday) return 'Hier'
@@ -240,11 +290,15 @@ function HistoriquePageContent() {
                           filter.color === 'pink' ? '#fce7f3' :
                           filter.color === 'yellow' ? '#fef9c3' :
                           filter.color === 'blue' ? '#dbeafe' :
+                          filter.color === 'green' ? '#dcfce7' :
+                          filter.color === 'purple' ? '#f3e8ff' :
                           '#fee2e2',
                         borderColor:
                           filter.color === 'pink' ? '#ec4899' :
                           filter.color === 'yellow' ? '#eab308' :
                           filter.color === 'blue' ? '#3b82f6' :
+                          filter.color === 'green' ? '#22c55e' :
+                          filter.color === 'purple' ? '#a855f7' :
                           '#ef4444',
                       }
                     : undefined
@@ -322,6 +376,20 @@ function HistoriquePageContent() {
                     }
                     label = `Température ${entry.data.temperature}°C (${typeLabels[entry.data.type]})`
                     note = entry.data.note || ''
+                  } else if (entry.type === 'note') {
+                    icon = '📝'
+                    label = entry.data.content || 'Note'
+                    note = ''
+                  } else if (entry.type === 'checklist') {
+                    const rawCareType = entry.data.care_schedules?.care_types
+                    const careType = Array.isArray(rawCareType) ? rawCareType[0] : rawCareType
+                    icon = careType?.icon || '✅'
+                    label = entry.data.note || careType?.name || 'Tâche réalisée'
+                    if (entry.data.quantity !== null && entry.data.quantity !== undefined) {
+                      const unit = entry.data.care_schedules?.default_unit || ''
+                      label += ` • ${entry.data.quantity}${unit ? ` ${unit}` : ''}`
+                    }
+                    note = ''
                   }
 
                   return (
@@ -333,19 +401,21 @@ function HistoriquePageContent() {
                         <span className="text-xl mt-0.5">{icon}</span>
                         <div className="flex-1">
                           <p className="font-medium">{time}</p>
-                          <p className="text-sm text-gray-600">{label}</p>
+                          <p className={`text-sm text-gray-600 ${entry.type === 'note' ? 'whitespace-pre-wrap' : ''}`}>{label}</p>
                           {note && (
                             <p className="text-xs text-gray-500 italic mt-1">"{note}"</p>
                           )}
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleDelete(entry.id, entry.table)}
-                        disabled={deletingId === entry.id}
-                        className="text-red-500 hover:text-red-700 disabled:opacity-50 text-xl font-bold ml-2 flex-shrink-0"
-                      >
-                        ✕
-                      </button>
+                      {entry.type !== 'checklist' && (
+                        <button
+                          onClick={() => handleDelete(entry.id, entry.table as 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures' | 'notes')}
+                          disabled={deletingId === entry.id}
+                          className="text-red-500 hover:text-red-700 disabled:opacity-50 text-xl font-bold ml-2 flex-shrink-0"
+                        >
+                          ✕
+                        </button>
+                      )}
                     </li>
                   )
                 })}
