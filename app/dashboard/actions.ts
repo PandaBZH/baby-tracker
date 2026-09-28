@@ -93,7 +93,7 @@ export async function deleteCareLog(logId: string) {
 }
 
 export async function deleteHistoryEntry(
-  table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures' | 'planned_care_logs',
+  table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures' | 'planned_care_logs' | 'notes',
   entryId: string
 ) {
   const supabase = await createClient()
