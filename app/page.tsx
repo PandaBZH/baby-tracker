@@ -336,6 +336,12 @@ console.log('PC ERROR:', pcError)
 
   const formatTime = (time: string) => time?.slice(0, 5) || ''
 
+  const todaysBottles = history.filter(entry => entry.type === 'bottle')
+  const totalBottleMl = todaysBottles.reduce(
+    (total, entry) => total + (Number(entry.data.quantity_ml) || 0),
+    0
+  )
+
   return (
     <div className="p-8 max-w-2xl mx-auto space-y-6">
       {/* En-tête */}
@@ -376,6 +382,25 @@ console.log('PC ERROR:', pcError)
           >
             🌡️ Temp.
           </Link>
+        </div>
+      </section>
+
+      {/* 🍼 TOTAL BIBERONS DU JOUR */}
+      <section className="rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-2xl shadow-sm">
+              🍼
+            </div>
+            <div>
+              <p className="text-sm font-medium text-blue-700">Biberons aujourd'hui</p>
+              <p className="text-3xl font-bold text-blue-950">{totalBottleMl} ml</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-bold text-blue-900">{todaysBottles.length}</p>
+            <p className="text-xs text-blue-700">{todaysBottles.length > 1 ? 'biberons' : 'biberon'}</p>
+          </div>
         </div>
       </section>
 
