@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
+import { LocalDateTimeInput } from '@/components/LocalDateTimeInput'
+import { SubmitButton } from '@/components/SubmitButton'
 
 export default async function NewFeedingPage() {
   const supabase = await createClient()
@@ -43,12 +45,6 @@ export default async function NewFeedingPage() {
     )
   }
 
-  // Heure locale actuelle au format "HH:MM" pour préremplir le champ
-  const now = new Date()
-  const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 16)
-
   async function createFeeding(formData: FormData) {
     'use server'
 
@@ -70,7 +66,7 @@ export default async function NewFeedingPage() {
     const { error } = await supabase.from('feedings').insert({
       baby_id: baby.id,
       side,
-      fed_at: new Date(fed_at).toISOString(),
+      fed_at,
       duration_minutes: duration_minutes ? parseInt(duration_minutes) : null,
       note: note || null,
       created_by: user.id,
@@ -132,11 +128,9 @@ export default async function NewFeedingPage() {
           <label className="block text-sm font-medium mb-1">
             Heure de la tétée
           </label>
-          <input
-            type="datetime-local"
+          <LocalDateTimeInput
             name="fed_at"
             required
-            defaultValue={localDateTime}
             className="w-full border rounded-lg p-2"
           />
         </div>
@@ -173,12 +167,9 @@ export default async function NewFeedingPage() {
           >
             Annuler
           </Link>
-          <button
-            type="submit"
-            className="flex-1 bg-blue-600 text-white rounded-lg py-2 font-medium"
-          >
-            Enregistrer
-          </button>
+          <SubmitButton
+            className="flex-1 bg-blue-600 text-white rounded-lg py-2 font-medium disabled:hover:bg-blue-600"
+          />
         </div>
       </form>
     </div>
