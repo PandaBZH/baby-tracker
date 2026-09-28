@@ -6,10 +6,6 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { 
   getCareLogsForDate,
-  getPlannedCareTypes,
-  getPlannedCareForDate,
-  logPlannedCare,
-  removePlannedCareLog,
   quickCheck, 
   uncheckLog, 
   deleteHistoryEntry 
@@ -49,54 +45,37 @@ interface CareLog {
   } | null
 }
 
-interface CareType {
-  id: string
-  name: string
-  icon: string | null
-}
 
 interface HistoryEntry {
   id: string
-  type: 'feeding' | 'diaper' | 'bottle' | 'temperature' | 'planned_care'
+  type: 'feeding' | 'diaper' | 'bottle' | 'temperature' | 'checklist' | 'note'
   timestamp: string
   data: any
-  table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures' | 'planned_care_logs'
+  table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures' | 'care_logs' | 'notes'
   label?: string
   quantity?: number | null
   unit?: string | null
 }
 
-interface PlannedCareLogRow {
-  id: string
-  logged_at: string
-  care_schedules: {
-    id: string
-    label: string | null
-    default_quantity: number | null
-    default_unit: string | null
-    care_types: Array<{
-      id: string
-      name: string
-      icon: string | null
-    }>
-  } | null
-}
 
 export default function HomePage() {
   const supabase = createClient()
   const [baby, setBaby] = useState<Baby | null>(null)
   const [family, setFamily] = useState<Family | null>(null)
   const [careLogs, setCareLogs] = useState<CareLog[]>([])
-  const [plannedCares, setPlannedCares] = useState<CareType[]>([])
-  const [checkedPlannedCares, setCheckedPlannedCares] = useState<string[]>([])
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [newCareName, setNewCareName] = useState('')
-  const [showAddCareForm, setShowAddCareForm] = useState(false)
 
-  const today = new Date().toISOString().split('T')[0]
+  const getLocalDateKey = (date = new Date()) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  const today = getLocalDateKey()
 
   // Fonction pour récupérer l'historique complet
   const fetchHistory = async (babyId: string) => {
@@ -129,29 +108,32 @@ export default function HomePage() {
         .gte('measured_at', `${today}T00:00:00`)
         .lte('measured_at', `${today}T23:59:59`)
 
-      const { data: plannedCareLogsData, error: pcError } = await supabase
-  .from('planned_care_logs')
-  .select(`
-    id,
-    logged_at,
-    care_schedule_id,
-    care_schedules(
-      id,
-      default_quantity,
-      default_unit,
-      care_types(
-        id,
-        name,
-        icon
-      )
-    )
-  `)
-  .eq('baby_id', babyId)
-  .gte('logged_at', `${today}T00:00:00`)
-  .lte('logged_at', `${today}T23:59:59`)
+      const localDayStart = new Date(`${today}T00:00:00`).toISOString()
+      const localDayEnd = new Date(`${today}T23:59:59.999`).toISOString()
 
-console.log('PLANNED CARE LOGS DATA:', plannedCareLogsData)
-console.log('PC ERROR:', pcError)
+      const { data: notes } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('baby_id', babyId)
+        .gte('noted_at', localDayStart)
+        .lte('noted_at', localDayEnd)
+
+      const { data: checklistLogs } = await supabase
+        .from('care_logs')
+        .select(`
+          id,
+          done_at,
+          note,
+          quantity,
+          care_schedules (
+            default_unit,
+            care_types (name, icon)
+          )
+        `)
+        .eq('baby_id', babyId)
+        .eq('scheduled_date', today)
+        .eq('fait', true)
+        .not('done_at', 'is', null)
 
       // Combine et trie par timestamp décroissant
       const allHistory: HistoryEntry[] = [
@@ -183,21 +165,20 @@ console.log('PC ERROR:', pcError)
           data: t,
           table: 'temperatures' as const,
         })),
-        ...((plannedCareLogsData as PlannedCareLogRow[] | null) || []).map(pc => {
-          const careType = pc.care_schedules?.care_types?.[0]
-          const label = pc.care_schedules?.label || careType?.name || 'Soin'
-
-          return {
-            id: pc.id,
-            type: 'planned_care' as const,
-            timestamp: pc.logged_at,
-            data: pc,
-            table: 'planned_care_logs' as const,
-            label,
-            quantity: pc.care_schedules?.default_quantity,
-            unit: pc.care_schedules?.default_unit,
-          }
-        }),
+        ...(notes || []).map(n => ({
+          id: n.id,
+          type: 'note' as const,
+          timestamp: n.noted_at,
+          data: n,
+          table: 'notes' as const,
+        })),
+        ...(checklistLogs || []).map(log => ({
+          id: log.id,
+          type: 'checklist' as const,
+          timestamp: log.done_at as string,
+          data: log,
+          table: 'care_logs' as const,
+        })),
       ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
       setHistory(allHistory)
@@ -250,14 +231,6 @@ console.log('PC ERROR:', pcError)
         return timeA.localeCompare(timeB)
       }) || [])
 
-      // Récupère les types de soins disponibles
-      const careTypes = await getPlannedCareTypes(profile.family_id)
-      setPlannedCares(careTypes)
-
-      // 👇 REMPLACE CETTE PARTIE PAR LE CODE DU 4️⃣
-      const checkedCares = await getPlannedCareForDate(babyData.id, today)
-      setCheckedPlannedCares(checkedCares)
-
       // Récupère l'historique
       await fetchHistory(babyData.id)
     } catch (err) {
@@ -301,25 +274,8 @@ console.log('PC ERROR:', pcError)
     }
   }
 
-  const handleTogglePlannedCare = async (careId: string) => {
-    try {
-      if (checkedPlannedCares.includes(careId)) {
-        // Décocher
-        await removePlannedCareLog(baby.id, careId, today)
-        setCheckedPlannedCares(checkedPlannedCares.filter(id => id !== careId))
-      } else {
-        // Cocher
-        await logPlannedCare(baby.id, careId, today)
-        setCheckedPlannedCares([...checkedPlannedCares, careId])
-      }
-      await fetchHistory(baby.id)
-    } catch (err) {
-      console.error(err)
-      alert('Erreur lors du toggle')
-    }
-  }
 
-  const handleDeleteHistory = async (entryId: string, table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures' | 'planned_care_logs') => {
+  const handleDeleteHistory = async (entryId: string, table: 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures' | 'notes') => {
     if (!confirm('Supprimer cet enregistrement ?')) return
 
     setDeletingId(entryId)
@@ -381,6 +337,12 @@ console.log('PC ERROR:', pcError)
             className="p-4 bg-red-100 border-2 border-red-400 rounded-lg text-center font-bold hover:bg-red-200 transition"
           >
             🌡️ Temp.
+          </Link>
+          <Link
+            href={`/notes/new?baby=${baby.id}&date=${today}`}
+            className="col-span-2 p-4 bg-purple-100 border-2 border-purple-400 rounded-lg text-center font-bold hover:bg-purple-200 transition"
+          >
+            📝 Note
           </Link>
         </div>
       </section>
@@ -459,82 +421,6 @@ console.log('PC ERROR:', pcError)
         )}
       </section>
 
-      {/* 🛁 SOINS GÉNÉRAUX (généraliste) */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-bold text-lg flex items-center gap-2">
-            <span>🛁 Soins généraux</span>
-            <span className="text-sm text-gray-500">⚙️</span>
-          </h2>
-        </div>
-        {plannedCares.length > 0 ? (
-          <div className="space-y-2">
-            {plannedCares.map((care) => (
-              <label
-                key={care.id}
-                className={`rounded-lg p-3 flex items-center gap-3 cursor-pointer transition ${
-                  checkedPlannedCares.includes(care.id)
-                    ? 'bg-green-50 border-2 border-green-300'
-                    : 'bg-white border-2 border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={checkedPlannedCares.includes(care.id)}
-                  onChange={() => handleTogglePlannedCare(care.id)}
-                  className="w-5 h-5 cursor-pointer"
-                />
-                <span className="text-2xl">{care.icon || '✓'}</span>
-                <span className="font-medium flex-1">{care.name}</span>
-              </label>
-            ))}
-          </div>
-        ) : (
-          <p className="text-gray-500 italic">Aucun soin configuré</p>
-        )}
-
-        {/* Bouton ajouter soin ad hoc */}
-        {!showAddCareForm ? (
-          <button
-            onClick={() => setShowAddCareForm(true)}
-            className="text-sm text-blue-600 hover:text-blue-800 font-medium mt-3"
-          >
-            + Ajouter un soin ad hoc
-          </button>
-        ) : (
-          <div className="border rounded-lg p-3 mt-3 bg-blue-50 space-y-2">
-            <input
-              type="text"
-              value={newCareName}
-              onChange={(e) => setNewCareName(e.target.value)}
-              placeholder="Ex: Coupe d'ongles, Nettoyage nez..."
-              className="w-full border rounded-lg p-2 text-sm"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  // TODO: Implémenter la sauvegarde du soin ad hoc
-                  setShowAddCareForm(false)
-                  setNewCareName('')
-                }}
-                className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
-              >
-                ✓ Ajouter
-              </button>
-              <button
-                onClick={() => {
-                  setShowAddCareForm(false)
-                  setNewCareName('')
-                }}
-                className="px-3 py-2 border rounded-lg text-sm hover:bg-gray-50"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        )}
-      </section>
-
       {/* 📊 HISTORIQUE (ordre décroissant) */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -583,11 +469,17 @@ console.log('PC ERROR:', pcError)
                 }
                 label = `Température ${entry.data.temperature}°C (${typeLabels[entry.data.type]})`
                 note = entry.data.note || ''
-              } else if (entry.type === 'planned_care') {
-                icon = '✓'
-                label = entry.label || 'Soin'
-                if (entry.quantity) {
-                  label += ` ${entry.quantity} ${entry.unit || ''}`
+              } else if (entry.type === 'note') {
+                icon = '📝'
+                label = entry.data.content || 'Note'
+              } else if (entry.type === 'checklist') {
+                const rawCareType = entry.data.care_schedules?.care_types
+                const careType = Array.isArray(rawCareType) ? rawCareType[0] : rawCareType
+                icon = careType?.icon || '✅'
+                label = entry.data.note || careType?.name || 'Tâche réalisée'
+                if (entry.data.quantity !== null && entry.data.quantity !== undefined) {
+                  const unit = entry.data.care_schedules?.default_unit || ''
+                  label += ` • ${entry.data.quantity}${unit ? ` ${unit}` : ''}`
                 }
               }
 
@@ -600,7 +492,7 @@ console.log('PC ERROR:', pcError)
                     <span className="text-xl mt-0.5">{icon}</span>
                     <div className="flex-1">
                       <p className="font-medium">{time}</p>
-                      <p className="text-sm text-gray-600">{label}</p>
+                      <p className={`text-sm text-gray-600 ${entry.type === 'note' ? 'whitespace-pre-wrap' : ''}`}>{label}</p>
                       {note && (
                         <p className="text-xs text-gray-500 italic mt-1">
                           "{note}"
@@ -608,13 +500,15 @@ console.log('PC ERROR:', pcError)
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDeleteHistory(entry.id, entry.table as any)}
-                    disabled={deletingId === entry.id}
-                    className="text-red-500 hover:text-red-700 disabled:opacity-50 text-xl font-bold ml-2 flex-shrink-0"
-                  >
-                    ✕
-                  </button>
+                  {entry.type !== 'checklist' && (
+                    <button
+                      onClick={() => handleDeleteHistory(entry.id, entry.table as 'feedings' | 'diaper_changes' | 'bottles' | 'temperatures' | 'notes')}
+                      disabled={deletingId === entry.id}
+                      className="text-red-500 hover:text-red-700 disabled:opacity-50 text-xl font-bold ml-2 flex-shrink-0"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </li>
               )
             })}
